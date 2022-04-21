@@ -183,7 +183,7 @@ class NavierStokesCartesian(Problem):
         return
 
     # Define problem form:
-    def define_form(self, THETA):
+    def define_form(self, THETA, stationary = False):
 
         # Specify trial functions based on time discretization:
         v, p = (THETA == 0.0)*self._v + (THETA != 0)*self.v, (THETA == 0)*self._p + (THETA!=0)*self.p
@@ -206,17 +206,17 @@ class NavierStokesCartesian(Problem):
         # Add natural boundary conditions:
         self.F += sum(self.bcs_natural)
 
-        return
-
-    def define_solver(self, THETA = THETA, stationary = False):
-
-        # Update form:
-        self.define_form(THETA)
-
         if not stationary:
 
             # Add discretized time derivative for non-stationary problems:
-            self.F += self.rho()*dolfin.inner(self._v_ - self.v_k, self.v_)*self.d_w*self.dx
+            self.F += self.rho()*dolfin.inner((v - self.v_k)/self.dt, self.v_)*self.d_w*self.dx
+
+        return
+
+    def define_solver(self, THETA = THETA):
+
+        # Update form:
+        self.define_form(THETA)
 
         # Define solver using superstructure method:
         Problem.define_solver(self, THETA)

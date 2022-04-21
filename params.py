@@ -46,7 +46,7 @@ ez = dolfin.Constant((0., 1.))
 # (II.1) Hagen-Poiseuille benchmark
 # ---------------------------------
 # Channel geometry (2d rectangular channel (0,l_x) x (-l_z,l_z)):
-l_x = 1.0; l_z = 0.1       # Length and half-width of the channel
+l_x = 1.0; l_z = 1.0       # Length and half-width of the channel
 # Channel geometry (h-axisym: (0,l_x) x (0,R), v-axisym: (0,R) x (0,l_z)):
 R = 0.1                   # Pipe radius
 
@@ -69,7 +69,7 @@ theta_i = 263.
 # (II.4) COMSOL benchmark
 # -----------------------
 # Sphere initial position and radius:
-sphere_position = dolfin.Point(0.0, 0.0); sphere_radius = 0.001
+sphere_position = dolfin.Point(0.0, 0.0); sphere_radius = 0.05
 sphere_rho = 2.9e3; sphere_mass = 4./3.*dolfin.pi*sphere_radius**3*sphere_rho
 
 
