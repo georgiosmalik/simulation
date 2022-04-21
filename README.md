@@ -1,2 +1,2 @@
 # simulation
-sim submodule for FEniCS projects
+`simulation` is a `python` submodule for my FEniCS projects, it contains implementations of some problems in FEM formulation
