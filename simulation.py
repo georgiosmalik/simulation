@@ -183,7 +183,7 @@ class NavierStokesCartesian(Problem):
         return
 
     # Define problem form:
-    def define_form(self, THETA, stationary = False):
+    def define_form(self, THETA, stationary):
 
         # Specify trial functions based on time discretization:
         v, p = (THETA == 0.0)*self._v + (THETA != 0)*self.v, (THETA == 0)*self._p + (THETA!=0)*self.p
@@ -213,10 +213,10 @@ class NavierStokesCartesian(Problem):
 
         return
 
-    def define_solver(self, THETA = THETA):
+    def define_solver(self, THETA = THETA, stationary = False):
 
         # Update form:
-        self.define_form(THETA)
+        self.define_form(THETA, stationary)
 
         # Define solver using superstructure method:
         Problem.define_solver(self, THETA)
@@ -365,9 +365,9 @@ class RigidBodyMotionVAxisymNoninertial(NavierStokesVAxisym):
 
         return
 
-    def define_form(self, THETA):
+    def define_form(self, THETA, stationary):
 
-        NavierStokesVAxisym.define_form(self, THETA)
+        NavierStokesVAxisym.define_form(self, THETA, stationary)
 
         # Add ODE for rigid body vertical velocity:
         self.F +=  1/dolfin.assemble(1.0*self.dx)\
@@ -378,7 +378,11 @@ class RigidBodyMotionVAxisymNoninertial(NavierStokesVAxisym):
     # Add non-inertial correction to the right hand side:
     def d(self, u):
 
-        return super().d(u) - dolfin.inner((self.vb - self.vb_k)/self.dt, u[1])*self.d_w*self.dx
+        # Add non-inertial correction to the right hand side (check the sign):
+        return NavierStokesVAxisym.d(self, u) + dolfin.inner((self.vb - self.vb_k)/self.dt, u[1])*self.d_w*self.dx
+
+    # this works ok:
+    #return super().d(u) - dolfin.inner((self.vb - self.vb_k)/self.dt, u[1])*self.d_w*self.dx
 
     # End of RigidBodyMotionaVAxisymNoninertial
 
