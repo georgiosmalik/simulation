@@ -2,7 +2,6 @@
 
 import dolfin
 
-import em.enthalpy_method as em
 import sim.params as prm
 
 # THETA scheme time discretization parameter (0.0 for explicit):
@@ -17,73 +16,34 @@ DT = dolfin.Constant(1e-3)
 # Define unit vector pointing upwards:
 ez = dolfin.Constant((0.0, 1.0))
 
-# -------------------
-# Material parameters
-# -------------------
+def CGdeg(mesh, deg = DEGREE):
 
-# Density:
-def rho(theta, eps_minus = em.EPS, eps_plus = em.EPS, deg = em.DEG):
+    return dolfin.FunctionSpace(mesh, dolfin.FiniteElement("CG", mesh.ufl_cell(), deg))
 
-    return em.mollify(prm.rho_l,
-                      prm.rho_s,
-                      theta,
-                      x0 = prm.theta_m,
-                      eps_minus = eps_minus,
-                      eps_plus = eps_plus,
-                      deg = deg)
+def TaylorHood(mesh, deg = DEGREE):
 
-# Dynamic viscosity:
-def mu(theta, eps_minus = em.EPS, eps_plus = em.EPS, deg = em.DEG):
+    return
 
-    return em.mollify(prm.mu_l,
-                      prm.mu_s,
-                      theta,
-                      x0 = prm.theta_m,
-                      eps_minus = eps_minus,
-                      eps_plus = eps_plus,
-                      deg = deg)
+def bubble(mesh, deg = DEGREE):
 
-# Volumetric heat capacity
-def rhoc(theta, eps_minus = em.EPS, eps_plus = em.EPS, deg = em.DEG):
-
-    # Return total effective rho*c: 
-    return em.mollify(prm.rho*prm.c_s,
-                      prm.rho*prm.c_l,
-                      theta,
-                      x0 = prm.theta_m,
-                      eps_minus = eps_minus,
-                      eps_plus = eps_plus,
-                      deg = deg) \
-                      + em.impulse(prm.rho*prm.L_m,
-                                   theta,
-                                   x0 = prm.theta_m,
-                                   eps_minus = eps_minus,
-                                   eps_plus = eps_plus,
-                                   deg = deg)
-
-# Heat conductivity:
-def k(theta, eps_minus = em.EPS, eps_plus = em.EPS, deg = em.DEG):
-
-    return em.mollify(prm.k_s,
-                      prm.k_l,
-                      theta,
-                      x0 = prm.theta_m,
-                      eps_minus = eps_minus,
-                      eps_plus = eps_plus,
-                      deg = deg)
-
-# ===================
+    return
 
 # General variational problem:
 class Problem:
 
-    def __init__(self):
+    def __init__(self, geometry):
 
         # Define default time step size:
         self.dt = DT
 
-        # Initialize unknown functions:
-        self.w = None; self.w_k = None; self.w_k_minus1 = None
+        # Define measures, measure weight, and normal:
+        self.dx = geometry.dx; self.ds = geometry.ds; self.d_w = 1.0; self.n = geometry.n
+
+        # Define spatial coordinate:
+        self.x = dolfin.SpatialCoordinate(geometry.mesh)
+
+        # Initialize FE space and functions:
+        self.W = None; self.w = None; self.w_k = None; self.w_kminus1 = None
 
         # Initialize form:
         self.F = 0
@@ -91,7 +51,10 @@ class Problem:
         # Initialize boundary conditions:
         self.bcs_essential = []; self.bcs_natural = []
 
-    def define_solver(self, THETA = THETA):
+    def define_solver(self, THETA = THETA, stationary = False):
+
+        # Build form:
+        self.define_form(THETA, stationary)
 
         # Return linear formulation:
         if not THETA:
@@ -129,9 +92,15 @@ class Problem:
 
             return
 
+    # Set initial condition (from expression):
+    def set_initial(self, w_initial):
+
+        # Use theta_initial expression to interpolate the function:
+        self.w_k.assign(dolfin.interpolate(w_initial, self.W))
+
     def assign_next_step(self):
 
-        self.w_k_minus1.assign(self.w_k)
+        self.w_kminus1.assign(self.w_k)
 
         self.w_k.assign(self.w)
 
@@ -145,14 +114,8 @@ class NavierStokesCartesian(Problem):
 
     def __init__(self, geometry):
 
-        # Initialize superstructure (form, boundary conditions, functions):
-        Problem.__init__(self)
-
-        # Define measures, measure weight, and normal:
-        self.dx = geometry.dx; self.ds = geometry.ds; self.d_w = 1.0; self.n = geometry.n
-
-        # Define spatial coordinate:
-        self.x = dolfin.SpatialCoordinate(geometry.mesh)
+        # Initialize general superstructure (form, boundary conditions, functions, geometry):
+        Problem.__init__(self, geometry)
 
         # (I) FE spaces
         # -------------
@@ -175,7 +138,7 @@ class NavierStokesCartesian(Problem):
         # Define general functions:
         self.w = dolfin.Function(self.W); self.v, self.p = dolfin.split(self.w)
         self.w_k = dolfin.Function(self.W); self.v_k, self.p_k = dolfin.split(self.w_k)
-        self.w_k_minus1 = dolfin.Function(self.W)
+        self.w_kminus1 = dolfin.Function(self.W)
 
         # Define test and trial functions:
         self.v_, self.p_ = dolfin.TestFunctions(self.W); self._v, self._p = dolfin.TrialFunctions(self.W)
@@ -210,16 +173,6 @@ class NavierStokesCartesian(Problem):
 
             # Add discretized time derivative for non-stationary problems:
             self.F += self.rho()*dolfin.inner((v - self.v_k)/self.dt, self.v_)*self.d_w*self.dx
-
-        return
-
-    def define_solver(self, THETA = THETA, stationary = False):
-
-        # Update form:
-        self.define_form(THETA, stationary)
-
-        # Define solver using superstructure method:
-        Problem.define_solver(self, THETA)
 
         return
 
@@ -397,6 +350,95 @@ class RigidBodyMotionALE(NavierStokesCartesian):
 # (II) Thermal problems
 # ---------------------
 
+# Heat equation in Cartesian coordinates:
+class FourierCartesian(Problem):
+
+    def __init__(self, geometry):
+
+        # Initialize general superstructure (form, boundary conditions, functions, geometry):
+        Problem.__init__(self, geometry)
+
+        # (I) Initialize FE spaces
+        # ------------------------
+        
+        # Define function space:
+        self.T = CGdeg(geometry.mesh)
+
+        # Define temperature and enthalpy functions:
+        self.theta = dolfin.Function(self.T); self.h = dolfin.Function(self.T)
+
+        # Functions to store solutions from previous steps:
+        self.theta_k = dolfin.Function(self.T); self.theta_kminus1 = dolfin.Function(self.T)
+
+        # Test functions and trial functions:
+        self.theta_ = dolfin.TestFunction(self.T); self._theta = dolfin.TrialFunction(self.T)
+
+        # Bind with the superstructure:
+        self.w = self.theta; self.w_k = self.theta_k; self.w_kminus1 = self.theta_kminus1; self.W = self.T
+
+        # (II) Initialize problem
+        # -----------------------
+
+        # Initialize problem form:
+        self.F = 0.0
+
+        # Initialize essential and natural boundary conditions:
+        self.bcs_essential = []; self.bcs_natural = []
+
+        # Define volumetric and surface measure weight for projected problems:
+        self.d_w = dolfin.Constant(1.0)
+        # ========================
+
+        return
+
+    # Define material parameters (volumetric heat capacity):
+    def rhoc(self, theta):
+
+        return prm.rho_l*prm.c_l
+    
+    # Define material parameters (heat conductivity):
+    def k(self, theta):
+
+        return prm.k_l
+
+    # Elliptic variational term:
+    def a(self, theta1, theta2, vartheta):
+
+        return self.k(theta1)*dolfin.inner(dolfin.grad(theta2), dolfin.grad(vartheta))*self.d_w*self.dx
+
+    def define_form(self, THETA, stationary):
+
+        theta = (THETA == 0.0)*self._theta + (THETA != 0)*self.theta
+
+        # Add elliptic term (Crank-Nicholson scheme):
+        self.F += THETA*self.a(self.theta, theta, self.theta_) \
+                  + (1.0 - THETA)*self.a(self.theta_k, theta, self.theta_)
+
+        # Add natural boundary condtions (sign: (+ heat flux) dot (outer normal)):
+        self.F += sum(self.bcs_natural)
+
+        # Add time discretization for non-stationary problems:
+        if not stationary:
+
+            self.F += (THETA*self.rhoc(self.theta) + (1.0 - THETA)*self.rhoc(self.theta_k)) \
+                      *dolfin.inner(theta - self.theta_k, self.theta_)/self.dt*self.d_w*self.dx
+
+        return
+
+    # END of FourierCartesian
+
+class FourierVAxisym(FourierCartesian):
+
+    def __init__(self, geometry):
+
+        FourierCartesian.__init__(self, geometry)
+
+        self.d_w = self.x[0]
+
+        return
+
+    # END of FourierVAxisym
+
 # (END) Thermal problems
 # ======================
 
@@ -422,9 +464,9 @@ class Data:
     def save_xdmf(self, t, **data):
 
         # Save material params
-        for field in data:
+        for var in data:
 
-            self.data_xdmf[field].write(data[field], t)
+            self.data_xdmf[var].write(data[var], t)
 
         return
 
