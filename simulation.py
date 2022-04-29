@@ -1,10 +1,11 @@
 # Sem bych chtel nastrkat veskery kod, ktery se tyka formulace problemu ve frniuvsd
 
 import dolfin
+import numpy as np
 
 import sim.params as prm
 
-# THETA scheme time discretization parameter (0.0 for explicit):
+# THETA scheme time discretization parameter (0.0 = forward Euler):
 THETA = 0.0
 
 # FE degree (for mechanical Taylor-Hood, for temperature +1):
@@ -16,9 +17,15 @@ DT = dolfin.Constant(1e-3)
 # Define unit vector pointing upwards:
 ez = dolfin.Constant((0.0, 1.0))
 
+# Define piecwise polynomial scalar continous FE space:
 def CGdeg(mesh, deg = DEGREE):
 
     return dolfin.FunctionSpace(mesh, dolfin.FiniteElement("CG", mesh.ufl_cell(), deg))
+
+# Define piecwise constant scalar discontinous FE space:
+def DGdeg(mesh, deg = 0):
+
+    return dolfin.FunctionSpace(mesh, dolfin.FiniteElement("DG", mesh.ufl_cell(), deg))
 
 def TaylorHood(mesh, deg = DEGREE):
 
@@ -44,6 +51,9 @@ class Problem:
 
         # Initialize FE space and functions:
         self.W = None; self.w = None; self.w_k = None; self.w_kminus1 = None
+
+        # Initialize auxiliary variables from other problem forms:
+        self.var = None; self.var_k = None; self.var_kminus1 = None
 
         # Initialize form:
         self.F = 0
@@ -98,6 +108,9 @@ class Problem:
         # Use theta_initial expression to interpolate the function:
         self.w_k.assign(dolfin.interpolate(w_initial, self.W))
 
+        # Assign the initial value to function for nonlinear solvers:
+        self.w.assign(self.w_k)
+
     def assign_next_step(self):
 
         self.w_kminus1.assign(self.w_k)
@@ -149,22 +162,23 @@ class NavierStokesCartesian(Problem):
     def define_form(self, THETA, stationary):
 
         # Specify trial functions based on time discretization:
-        v, p = (THETA == 0.0)*self._v + (THETA != 0)*self.v, (THETA == 0)*self._p + (THETA!=0)*self.p
+        self.v_tr, self.p_tr = (THETA==0.0)*self._v + (THETA!=0)*self.v, (THETA==0)*self._p + (THETA!=0)*self.p
 
         # Incompressibility
-        self.F += self.b(self.p_, v)
+        self.F += self.b(self.p_, self.v_tr)
 
         # Add pressure term to the form:
-        self.F += -self.b(p, self.v_)
+        self.F += -self.b(self.p_tr, self.v_)
 
         # Add viscosity term to the form:
-        self.F += self.a(v, self.v_)
+        self.F += self.a(self.v_tr, self.v_, self.var)
 
         # Add convective term to the form (fully non-linear):
-        self.F += (1 - THETA)*self.c(v, self.v_k, self.v_) + THETA*self.c(v, v, self.v_)
+        self.F += (1 - THETA)*self.c(self.v_tr, self.v_k, self.v_, self.var) \
+                  + THETA*self.c(self.v_tr, self.v_tr, self.v_, self.var)
 
         # Add right-hand side:
-        self.F += - self.d(self.v_)
+        self.F += - self.d(self.v_, self.var)
 
         # Add natural boundary conditions:
         self.F += sum(self.bcs_natural)
@@ -172,42 +186,41 @@ class NavierStokesCartesian(Problem):
         if not stationary:
 
             # Add discretized time derivative for non-stationary problems:
-            self.F += self.rho()*dolfin.inner((v - self.v_k)/self.dt, self.v_)*self.d_w*self.dx
+            self.F += self.rho(self.var)*dolfin.inner((self.v_tr - self.v_k)/self.dt, self.v_)*self.d_w*self.dx
 
         return
 
-    # ------------------------------------
-    # Problem specific material parameters
-    # ------------------------------------
+    # Material parameters
+    # -------------------
 
     # Density:
-    def rho(self, theta = None):
+    def rho(self, *var):
 
         return prm.rho_l
 
     # Dynamic viscosity:
-    def mu(self, theta = None):
+    def mu(self, *var):
 
         return prm.mu_l
     
-    # ----------------------
-    # Problem specific forms
-    # ----------------------
+
+    # Variational forms 
+    # -----------------
     
     # Viscous stress tensor
-    def S(self, u):
+    def S(self, u, *var):
 
         D = dolfin.sym(dolfin.grad(u))
 
-        return 2*self.mu()*D
+        return 2*self.mu(*var)*D
 
     # Define discretized Cauchy stress tensor:
-    def sigma(self, q, u):
+    def sigma(self, q, u, *var):
 
         # Identity tensor:
         I = dolfin.Identity(self.x.geometric_dimension())
 
-        return -q*I + self.S(u)
+        return -q*I + self.S(u, *var)
 
     # Divergence operator
     def b(self, q, u):
@@ -215,20 +228,20 @@ class NavierStokesCartesian(Problem):
         return q*dolfin.div(u)*self.d_w*self.dx
 
     # Viscosity term:
-    def a(self, u, v):
+    def a(self, u, v, *var):
 
-        return dolfin.inner(self.S(u), dolfin.grad(v))*self.d_w*self.dx
+        return dolfin.inner(self.S(u, *var), dolfin.grad(v))*self.d_w*self.dx
 
     # Convective term (Navier-Stokes form):
-    def c(self, u, u_k, v):
+    def c(self, u, u_conv, v, *var):
 
-        return self.rho()*dolfin.inner(dolfin.grad(u)*u_k,v)*self.d_w*self.dx
+        return self.rho(*var)*dolfin.inner(dolfin.grad(u)*u_conv,v)*self.d_w*self.dx
 
     # Right-hand side:
-    def d(self, u):
+    def d(self, u, *var):
 
         # Gravitation body force:
-        f = self.rho()*prm.g*(-ez)
+        f = self.rho(*var)*prm.g*(-ez)
 
         return dolfin.inner(f,u)*self.d_w*self.dx
 
@@ -256,10 +269,10 @@ class NavierStokesHAxisym(NavierStokesCartesian):
         return q*(dolfin.div(u)*self.d_w + u[1])*self.dx
 
     # Viscosity term in horizontal-axisym cylindrical coordinates:
-    def a(self, u, v):
+    def a(self, u, v, *var):
 
-        return (dolfin.inner(NavierStokesCartesian.S(self, u), dolfin.grad(v)) \
-                + 2*self.mu()*u[1]*v[1]/(self.x[1]*self.x[1]))*self.x[1]*self.dx
+        return (dolfin.inner(NavierStokesCartesian.S(self, u, *var), dolfin.grad(v)) \
+                + 2*self.mu(*var)*u[1]*v[1]/(self.x[1]*self.x[1]))*self.x[1]*self.dx
 
     # End of NavierStokesAxisym
 
@@ -285,10 +298,10 @@ class NavierStokesVAxisym(NavierStokesCartesian):
         return q*(dolfin.div(u)*self.d_w + u[0])*self.dx
 
     # Viscosity term in v-axisym cylindrical coordinates:
-    def a(self, u, v):
+    def a(self, u, v, *var):
 
-        return (dolfin.inner(NavierStokesCartesian.S(self, u), dolfin.grad(v)) \
-                + 2*self.mu()*u[0]*v[0]/(self.x[0]*self.x[0]))*self.x[0]*self.dx
+        return (dolfin.inner(NavierStokesCartesian.S(self, u, *var), dolfin.grad(v)) \
+                + 2*self.mu(*var)*u[0]*v[0]/(self.x[0]*self.x[0]))*self.x[0]*self.dx
 
     # End of NavierStokesAxisym
 
@@ -325,17 +338,19 @@ class RigidBodyMotionVAxisymNoninertial(NavierStokesVAxisym):
         # Add ODE for rigid body vertical velocity:
         self.F +=  1/dolfin.assemble(1.0*self.dx)\
                    *dolfin.inner(prm.sphere_mass*(-(self.vb - self.vb_k)/self.dt + prm.g), self.vb_)*self.dx\
-                   - (2*dolfin.pi)*dolfin.inner(dolfin.dot(self.sigma(self.p,self.v),-self.n)[1],self.vb_)\
+                   - (2*dolfin.pi)*dolfin.inner(dolfin.dot(self.sigma(self.p_tr, self.v_tr, self.var),-self.n)[1],
+                                                self.vb_)\
                    *self.d_w*self.ds(5) # Check if 5 is body surface!
 
     # Add non-inertial correction to the right hand side:
-    def d(self, u):
+    def d(self, u, *var):
 
         # Add non-inertial correction to the right hand side (check the sign):
-        return NavierStokesVAxisym.d(self, u) + dolfin.inner((self.vb - self.vb_k)/self.dt, u[1])*self.d_w*self.dx
+        return NavierStokesVAxisym.d(self, u, *var) \
+            + self.rho(*var)*dolfin.inner((self.vb - self.vb_k)/self.dt, u[1])*self.d_w*self.dx
 
     # this works ok:
-    #return super().d(u) - dolfin.inner((self.vb - self.vb_k)/self.dt, u[1])*self.d_w*self.dx
+    #return super().d(u) - self.rho(*var)*dolfin.inner((self.vb - self.vb_k)/self.dt, u[1])*self.d_w*self.dx
 
     # End of RigidBodyMotionaVAxisymNoninertial
 
@@ -376,6 +391,9 @@ class FourierCartesian(Problem):
         # Bind with the superstructure:
         self.w = self.theta; self.w_k = self.theta_k; self.w_kminus1 = self.theta_kminus1; self.W = self.T
 
+        # Initialize convective velocity:
+        self.v_conv = dolfin.Constant(np.zeros(self.x.geometric_dimension()))
+
         # (II) Initialize problem
         # -----------------------
 
@@ -391,6 +409,9 @@ class FourierCartesian(Problem):
 
         return
 
+    # Material parameters
+    # -------------------
+
     # Define material parameters (volumetric heat capacity):
     def rhoc(self, theta):
 
@@ -401,10 +422,15 @@ class FourierCartesian(Problem):
 
         return prm.k_l
 
+    # Variational forms
+    # -----------------
+
     # Elliptic variational term:
     def a(self, theta1, theta2, vartheta):
 
         return self.k(theta1)*dolfin.inner(dolfin.grad(theta2), dolfin.grad(vartheta))*self.d_w*self.dx
+
+    # Convective term
 
     def define_form(self, THETA, stationary):
 
@@ -421,7 +447,8 @@ class FourierCartesian(Problem):
         if not stationary:
 
             self.F += (THETA*self.rhoc(self.theta) + (1.0 - THETA)*self.rhoc(self.theta_k)) \
-                      *dolfin.inner(theta - self.theta_k, self.theta_)/self.dt*self.d_w*self.dx
+                      *(dolfin.inner(theta - self.theta_k, self.theta_)/self.dt \
+                         + dolfin.inner(self.v_conv, dolfin.grad(theta))*self.theta_)*self.d_w*self.dx
 
         return
 
@@ -489,6 +516,6 @@ class Data:
         return
 
 # (END) General Data structure
-# ============================
+# ===========================
 
 
