@@ -21,6 +21,8 @@ nu_s = mu_s/rho_s           # Kinematic viscosity of ice [m**2/s]
 nu_l = mu_l/rho_l           # Kinematic viscosity of water [m**2/s]
 alpha_s = k_s/(rho_s*c_s)  # Heat diffusivity of ice
 alpha_l = k_l/(rho_l*c_l)  # Heat diffusivity of water
+beta_s = 0.0               # Thermal expansivity of ice
+beta_l = 2.5e-4            # Thermal expansivity of water
 
 # (I.2) Physical parameters
 # -------------------------
