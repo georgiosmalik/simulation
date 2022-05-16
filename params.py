@@ -19,10 +19,8 @@ mu_s = 1e6                  # Dynamic viscosity of ice [Pa*s]
 mu_l = 1.51e-3                  # Dynamic viscosity of water [Pa*s]
 nu_s = mu_s/rho_s           # Kinematic viscosity of ice [m**2/s]
 nu_l = mu_l/rho_l           # Kinematic viscosity of water [m**2/s]
-kappa_s = k_s/(rho_s*c_s)  # Heat diffusivity of ice
-kappa_l = k_l/(rho_l*c_l)  # Heat diffusivity of water
-alpha_s = 0.0               # Thermal expansivity of ice
-alpha_l = 2.5e-4            # Thermal expansivity of water
+alpha_s = k_s/(rho_s*c_s)  # Heat diffusivity of ice
+alpha_l = k_l/(rho_l*c_l)  # Heat diffusivity of water
 
 # (I.2) Physical parameters
 # -------------------------
@@ -60,8 +58,10 @@ U_in = 10.0                 # Peak inflow velocity
 # (II.3) Stefan benchmark
 # -----------------------
 
+R1 = 0.0; R2 = 1.
+
 # Heat source power constant (Q_d(t) = Q_0*2^(d-1)|S_d(1)|*k_l*(alpha_l*t)^(d/2-1)):
-Q_0 = 0.05
+Q_0 = 50.
 
 # Initial temperature:
 theta_i = 263.
@@ -80,5 +80,5 @@ sphere_rho = 2.9e3; sphere_mass = 4./3.*dolfin.pi*sphere_radius**3*sphere_rho
 L = 0.1                     # Domain length
 H = 0.1                     # Domain height
 
-meshres = [50,50]           # Rectangular mesh resolution
+meshres = [1000,100]           # Rectangular mesh resolution
 #====================================

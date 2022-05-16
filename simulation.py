@@ -5,17 +5,33 @@ import numpy as np
 
 import sim.params as prm
 
-# THETA scheme time discretization parameter (0.0 = forward Euler):
-THETA = 0.0
+# ---------------------
+# (0) Global parameters
+# ---------------------
 
-# FE degree (for mechanical Taylor-Hood, for temperature +1):
-DEGREE = 1
+# (0.1) Temporal discretization
+# -----------------------------
+
+# Time discretization parameter THETA (0.0 = forward Euler):
+THETA = 0.0
 
 # Default time step size:
 DT = dolfin.Constant(1e-3)
 
+# (0.2) Spatial discretization
+# ----------------------------
+
+# FE degree (for mechanical Taylor-Hood, for temperature DEGREE+1):
+DEGREE = 1
+
 # Define unit vector pointing upwards:
 ez = dolfin.Constant((0.0, 1.0))
+
+# =================
+
+# ---------
+# FE spaces
+# ---------
 
 # Define piecwise polynomial scalar continous FE space:
 def CGdeg(mesh, deg = DEGREE):
@@ -35,6 +51,8 @@ def bubble(mesh, deg = DEGREE):
 
     return
 
+# =========
+
 # General variational problem:
 class Problem:
 
@@ -44,7 +62,10 @@ class Problem:
         self.dt = DT
 
         # Define measures, measure weight, and normal:
-        self.dx = geometry.dx; self.ds = geometry.ds; self.d_w = 1.0; self.n = geometry.n
+        self.dx = dolfin.Measure("dx", domain = geometry.mesh)
+        self.ds = dolfin.Measure("ds", domain = geometry.mesh, subdomain_data = geometry.boundary)
+        self.d_w = 1.0
+        self.n = dolfin.FacetNormal(geometry.mesh)
 
         # Define spatial coordinate:
         self.x = dolfin.SpatialCoordinate(geometry.mesh)
@@ -409,29 +430,6 @@ class FourierCartesian(Problem):
 
         return
 
-    # Material parameters
-    # -------------------
-
-    # Define material parameters (volumetric heat capacity):
-    def rhoc(self, theta):
-
-        return prm.rho_l*prm.c_l
-    
-    # Define material parameters (heat conductivity):
-    def k(self, theta):
-
-        return prm.k_l
-
-    # Variational forms
-    # -----------------
-
-    # Elliptic variational term:
-    def a(self, theta1, theta2, vartheta):
-
-        return self.k(theta1)*dolfin.inner(dolfin.grad(theta2), dolfin.grad(vartheta))*self.d_w*self.dx
-
-    # Convective term
-
     def define_form(self, THETA, stationary):
 
         theta = (THETA == 0.0)*self._theta + (THETA != 0)*self.theta
@@ -451,6 +449,27 @@ class FourierCartesian(Problem):
                          + dolfin.inner(self.v_conv, dolfin.grad(theta))*self.theta_)*self.d_w*self.dx
 
         return
+
+    # Material parameters
+    # -------------------
+
+    # Define material parameters (volumetric heat capacity):
+    def rhoc(self, theta):
+
+        return prm.rho_s*prm.c_s
+    
+    # Define material parameters (heat conductivity):
+    def k(self, theta):
+
+        return prm.k_s
+
+    # Variational forms
+    # -----------------
+
+    # Elliptic variational term:
+    def a(self, theta1, theta2, vartheta):
+
+        return self.k(theta1)*dolfin.inner(dolfin.grad(theta2), dolfin.grad(vartheta))*self.d_w*self.dx
 
     # END of FourierCartesian
 
@@ -475,40 +494,53 @@ class FourierVAxisym(FourierCartesian):
 class Data:
 
     # pri inicializaci chci loggovat, vytvorit soubory xdmf a npy
-    def __init__(self, path, geometry):
+    def __init__(self, geometry, path = "./out/data/"):
 
-        # Save path to data files:
+        # Save path to data folder:
         self.path = path
 
+        # Save communicator rank:
+        self.rank = geometry.rank
+
         # Initialize XDMF data files:
-        self.data_xdmf = {}
+        self.data_xdmf = dolfin.XDMFFile(geometry.comm, path + "data_FEM.xdmf")
+
+        # Set xdmf file parameters
+        
+        # This enables one to check files while computation is still running:
+        self.data_xdmf.parameters["flush_output"] = True
+
+        # This optimizes saving and save space (single mesh):
+        self.data_xdmf.parameters["functions_share_mesh"] = True
 
         # Initialize py data file:
         self.data_py = {}
               
         return
 
-    def save_xdmf(self, t, **data):
+    def save_xdmf(self, t, *data):
 
         # Save material params
-        for var in data:
+        for file_ in data:
 
-            self.data_xdmf[var].write(data[var], t)
+            # Save function to xdmf file (t=t as a third argument is necessary due to pybind11 bug):
+            self.data_xdmf.write(file_, t = t)
 
         return
 
     def save_py(self):
-        
-        np.save(self.path + 'data_py.npy', self.data_py)
+
+        if self.rank == 0:
+
+            # Save python file only on single rank:
+            np.save(self.path + 'data_py.npy', self.data_py)
 
         return
 
     def close(self):
 
         # Close FEM data files:
-        for xdmf in self.data_xdmf:
-            
-            self.xdmf.close()
+        self.data_xdmf.close()
 
         # Save and close py data files:
         self.save_py()
