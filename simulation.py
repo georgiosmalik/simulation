@@ -123,7 +123,7 @@ class Problem:
 
             return
 
-    # Set initial condition (from expression):
+    # Set initial condition (from expression, or constant):
     def set_initial(self, w_initial):
 
         # Use theta_initial expression to interpolate the function:
@@ -261,8 +261,11 @@ class NavierStokesCartesian(Problem):
     # Right-hand side:
     def d(self, u, *var):
 
+        # Define special density for buyoancy force:
+        self.rho_buoy = self.rho
+
         # Gravitation body force:
-        f = self.rho(*var)*prm.g*(-ez)
+        f = self.rho_buoy(*var)*prm.g*(-ez)
 
         return dolfin.inner(f,u)*self.d_w*self.dx
 
@@ -329,7 +332,7 @@ class NavierStokesVAxisym(NavierStokesCartesian):
 # Formulate rigid body motion problem in body's reference frame:
 class RigidBodyMotionVAxisymNoninertial(NavierStokesVAxisym):
 
-    def __init__(self, geometry):
+    def __init__(self, geometry, **rb_properties):
 
         # Initialize Navier Stokes problem in v-axisym geometry
         NavierStokesVAxisym.__init__(self, geometry)
@@ -350,6 +353,9 @@ class RigidBodyMotionVAxisymNoninertial(NavierStokesVAxisym):
         # Redefine test and trial functions:
         self.v_, self.p_, self.vb_ = dolfin.TestFunctions(self.W); _v, _p, _vb = dolfin.TrialFunctions(self.W)
 
+        # Save rigid body properties:
+        self.rb_mass = rb_properties["mass"]; self.rb_surface_id = rb_properties["srf_id"]
+
         return
 
     def define_form(self, THETA, stationary):
@@ -357,18 +363,19 @@ class RigidBodyMotionVAxisymNoninertial(NavierStokesVAxisym):
         NavierStokesVAxisym.define_form(self, THETA, stationary)
 
         # Add ODE for rigid body vertical velocity:
-        self.F +=  1/dolfin.assemble(1.0*self.dx)\
-                   *dolfin.inner(prm.sphere_mass*(-(self.vb - self.vb_k)/self.dt + prm.g), self.vb_)*self.dx\
-                   - (2*dolfin.pi)*dolfin.inner(dolfin.dot(self.sigma(self.p_tr, self.v_tr, self.var),-self.n)[1],
-                                                self.vb_)\
-                   *self.d_w*self.ds(5) # Check if 5 is body surface!
+        for srf_id in self.rb_surface_id:
+            self.F +=  1/dolfin.assemble(1.0*self.dx)\
+                       *dolfin.inner(self.rb_mass*(-(self.vb - self.vb_k)/self.dt + prm.g), self.vb_)*self.dx\
+                       - (2*dolfin.pi)*dolfin.inner(dolfin.dot(self.sigma(self.p_tr, self.v_tr, self.var),-self.n)[1],
+                                                    self.vb_)\
+                                                    *self.d_w*self.ds(srf_id) # Check if 5 is body surface!
 
     # Add non-inertial correction to the right hand side:
     def d(self, u, *var):
 
         # Add non-inertial correction to the right hand side (check the sign):
         return NavierStokesVAxisym.d(self, u, *var) \
-            + self.rho(*var)*dolfin.inner((self.vb - self.vb_k)/self.dt, u[1])*self.d_w*self.dx
+            + self.rho_buoy(*var)*dolfin.inner((self.vb - self.vb_k)/self.dt, u[1])*self.d_w*self.dx
 
     # this works ok:
     #return super().d(u) - self.rho(*var)*dolfin.inner((self.vb - self.vb_k)/self.dt, u[1])*self.d_w*self.dx
@@ -503,7 +510,8 @@ class Data:
         self.rank = geometry.rank
 
         # Initialize XDMF data files:
-        self.data_xdmf = dolfin.XDMFFile(geometry.comm, path + "data_FEM.xdmf")
+        self.data_xdmf = dolfin.XDMFFile(geometry.comm,
+                                         path + "data_FEM.xdmf")
 
         # Set xdmf file parameters
         

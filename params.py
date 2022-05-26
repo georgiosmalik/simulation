@@ -15,8 +15,8 @@ c_l = 4182.                # Specific heat of water
 c_m = (c_l + c_s)/2        # Specific heat of the mushy region
 k_s = 2.26                  # Thermal conductivity of ice [W/m/K]
 k_l = 0.6                  # Thermal conductivity of water [W/m/K]
-mu_s = 1e6                  # Dynamic viscosity of ice [Pa*s]
-mu_l = 1.51e-3                  # Dynamic viscosity of water [Pa*s]
+mu_s = 1e5                  # Dynamic viscosity of ice [Pa*s]
+mu_l = 1e-3                  # Dynamic viscosity of water [Pa*s]
 nu_s = mu_s/rho_s           # Kinematic viscosity of ice [m**2/s]
 nu_l = mu_l/rho_l           # Kinematic viscosity of water [m**2/s]
 alpha_s = k_s/(rho_s*c_s)  # Heat diffusivity of ice
@@ -29,8 +29,8 @@ beta_l = 2.5e-4            # Thermal expansivity of water
 g = 9.81                    # Gravitational acceleration
 theta_m = 273.              # Melting temperature [K]
 
-# (I.3) Geometric parameters
-# --------------------------
+# (I.3) Geometric constants
+# -------------------------
 
 # No-slip boundary condition in 2d:
 noslip = dolfin.Constant((0., 0.))
@@ -46,9 +46,9 @@ ez = dolfin.Constant((0., 1.))
 # (II.1) Hagen-Poiseuille benchmark
 # ---------------------------------
 # Channel geometry (2d rectangular channel (0,l_x) x (-l_z,l_z)):
-l_x = 1.0; l_z = .014       # Length and half-width of the channel
+l_x = 1.0; l_z = 1.4       # Length and half-width of the channel
 # Channel geometry (h-axisym: (0,l_x) x (0,R), v-axisym: (0,R) x (0,l_z)):
-R = 0.006                   # Pipe radius
+R = 0.5                   # Pipe radius
 
 nx = 100; nz = 100; nr = 20 # Mesh cells in x, z and r direction
 
@@ -71,8 +71,8 @@ theta_i = 263.
 # (II.4) COMSOL benchmark
 # -----------------------
 # Sphere initial position and radius:
-sphere_position = dolfin.Point(0.0, 0.0); sphere_radius = 0.001
-sphere_rho = 2.9e3; sphere_mass = 4./3.*dolfin.pi*sphere_radius**3*sphere_rho
+sphere_position = dolfin.Point(0.0, 0.0); sphere_radius = 0.1
+sphere_rho = 5e3; sphere_mass = 4./3.*dolfin.pi*sphere_radius**3*sphere_rho
 
 
 # ================================
