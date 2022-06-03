@@ -1,6 +1,7 @@
 # Sem bych chtel nastrkat veskery kod, ktery se tyka formulace problemu ve frniuvsd
 
 import dolfin
+import ufl
 import numpy as np
 
 import sim.params as prm
@@ -33,23 +34,46 @@ ez = dolfin.Constant((0.0, 1.0))
 # FE spaces
 # ---------
 
+# Standard elements:
+def CGdeg_ele(mesh, deg = DEGREE):
+
+    return dolfin.FiniteElement("CG", mesh.ufl_cell(), deg)
+
+def DGdeg_ele(mesh, deg = DEGREE):
+
+    return dolfin.FiniteElement("DG", mesh.ufl_cell(), deg)
+
+# Vector elements:
+def vecCGdeg_ele(mesh, deg = DEGREE):
+
+    return dolfin.VectorElement("CG", mesh.ufl_cell(), deg + 1)
+
+# Special elements:
+
+# Define MINI element (works with dolfin-version 2019.1.0):
+def MINI_ele(mesh, deg = DEGREE):
+
+    V_ele = dolfin.FiniteElement("Lagrange", mesh.ufl_cell(), deg)
+    
+    Q_ele = dolfin.FiniteElement("Bubble", mesh.ufl_cell(), mesh.topology().dim() + 1)
+
+    return dolfin.VectorElement(ufl.NodalEnrichedElement(V_ele, Q_ele))
+
 # Define piecwise polynomial scalar continous FE space:
 def CGdeg(mesh, deg = DEGREE):
 
-    return dolfin.FunctionSpace(mesh, dolfin.FiniteElement("CG", mesh.ufl_cell(), deg))
+    return dolfin.FunctionSpace(mesh, CGdeg_ele(mesh, deg))
 
 # Define piecwise constant scalar discontinous FE space:
 def DGdeg(mesh, deg = 0):
 
-    return dolfin.FunctionSpace(mesh, dolfin.FiniteElement("DG", mesh.ufl_cell(), deg))
+    return dolfin.FunctionSpace(mesh, DGdeg_ele(mesh, deg))
 
 def TaylorHood(mesh, deg = DEGREE):
 
     return
 
-def bubble(mesh, deg = DEGREE):
 
-    return
 
 # =========
 
@@ -155,8 +179,12 @@ class NavierStokesCartesian(Problem):
         # -------------
 
         # Elements and spaces for mechanical problem (Taylor-Hood):
-        V_ele = dolfin.VectorElement("CG", geometry.mesh.ufl_cell(), DEGREE+1)
-        P_ele = dolfin.FiniteElement("CG", geometry.mesh.ufl_cell(), DEGREE)
+        V_ele = vecCGdeg_ele(geometry.mesh, DEGREE+1)
+        P_ele = CGdeg_ele(geometry.mesh, DEGREE)
+
+        # Elements and spaces for mechanical problem (Bubble for velocity, works with dolfin-version 2019.1.0):
+        # V_ele = MINI_ele(geometry.mesh, DEGREE)
+        # P_ele = CGdeg_ele(geometry.mesh, DEGREE)
 
         # Define mixed element for velocity and pressure:
         W_ele = dolfin.MixedElement([V_ele, P_ele])
@@ -329,7 +357,7 @@ class NavierStokesVAxisym(NavierStokesCartesian):
 
     # End of NavierStokesAxisym
 
-# Formulate rigid body motion problem in body's reference frame:
+# Formulate rigid body motion in viscous fluid problem in body's reference frame:
 class RigidBodyMotionVAxisymNoninertial(NavierStokesVAxisym):
 
     def __init__(self, geometry, **rb_properties):
