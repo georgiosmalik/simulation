@@ -212,7 +212,7 @@ class NavierStokesCartesian(Problem):
 
         # Specify trial functions based on time discretization:
         self.v_tr, self.p_tr = (THETA==0.0)*self._v + (THETA!=0)*self.v, (THETA==0)*self._p + (THETA!=0)*self.p
-
+        
         # Incompressibility
         self.F += self.b(self.p_, self.v_tr)
 
@@ -236,6 +236,27 @@ class NavierStokesCartesian(Problem):
 
             # Add discretized time derivative for non-stationary problems:
             self.F += self.rho(self.var)*dolfin.inner((self.v_tr - self.v_k)/self.dt, self.v_)*self.d_w*self.dx
+
+        # Add stabilization (SUPG/grad-div, taken from [1]):
+        if False:
+
+            # Define weight of stabilization:
+            h = dolfin.CellDiameter(self.V.mesh())
+            delta_supg = 1/(1/float(self.dt) + 4*(prm.mu_l/prm.rho_l)/h**2)
+
+            delta_supg = h**2#/(4*prm.mu_l/prm.rho_l)
+
+            # Stabilize by bilinear part of the strong residuum:
+            self.F += dolfin.inner(- self.mu(self.var)*dolfin.div(dolfin.grad(self.v_tr)) \
+                                   + self.rho(self.var)*dolfin.grad(self.v_tr)*self.v_k \
+                                   + dolfin.grad(self.p_tr),
+                                   delta_supg*self.rho(self.var)*dolfin.grad(self.v_)*self.v_k)*self.d_w*self.dx
+
+            # Stabilize by right hand side of the strong residuum:
+            self.F += - self.d(delta_supg*self.rho(self.var)*dolfin.grad(self.v_)*self.v_k, self.var)
+
+            # Add grad-div stabilization:
+            # self.F += dolfin.inner(dolfin.div(self.v_tr), dolfin.div(self.v_))*self.d_w*self.dx
 
         return
 
@@ -379,7 +400,8 @@ class RigidBodyMotionVAxisymNoninertial(NavierStokesVAxisym):
         self.w_k = dolfin.Function(self.W); self.v_k, self.p_k, self.vb_k = dolfin.split(self.w_k)
 
         # Redefine test and trial functions:
-        self.v_, self.p_, self.vb_ = dolfin.TestFunctions(self.W); _v, _p, _vb = dolfin.TrialFunctions(self.W)
+        self.v_, self.p_, self.vb_ = dolfin.TestFunctions(self.W)
+        self._v, self._p, self._vb = dolfin.TrialFunctions(self.W)
 
         # Save rigid body properties:
         self.rb_mass = rb_properties["mass"]; self.rb_surface_id = rb_properties["srf_id"]
@@ -388,12 +410,15 @@ class RigidBodyMotionVAxisymNoninertial(NavierStokesVAxisym):
 
     def define_form(self, THETA, stationary):
 
+        self.vb_tr = (THETA==0.0)*self._vb + (THETA!=0)*self.vb
+
         NavierStokesVAxisym.define_form(self, THETA, stationary)
 
         # Add ODE for rigid body vertical velocity:
         for srf_id in self.rb_surface_id:
+            
             self.F +=  1/dolfin.assemble(1.0*self.dx)\
-                       *dolfin.inner(self.rb_mass*(-(self.vb - self.vb_k)/self.dt + prm.g), self.vb_)*self.dx\
+                       *dolfin.inner(self.rb_mass*(-(self.vb_tr - self.vb_k)/self.dt + prm.g), self.vb_)*self.dx\
                        - (2*dolfin.pi)*dolfin.inner(dolfin.dot(self.sigma(self.p_tr, self.v_tr, self.var),-self.n)[1],
                                                     self.vb_)\
                                                     *self.d_w*self.ds(srf_id) # Check if 5 is body surface!
@@ -549,8 +574,8 @@ class Data:
         # This optimizes saving and save space (single mesh):
         self.data_xdmf.parameters["functions_share_mesh"] = True
 
-        # Initialize py data file:
-        self.data_py = {}
+        # Initialize py data file and its basic structure:
+        self.data_py = {}; self.data_py["time_series"] = {"t": np.asarray([])}; self.data_py["parameters"] = {}
               
         return
 
@@ -563,6 +588,16 @@ class Data:
             self.data_xdmf.write(file_, t = t)
 
         return
+
+    def save_time_series(self, t, **data):
+
+        # Write time point:
+        self.data.data_py["time_series"]["t"] = np.append(self.data.data_py["time_series"]["t"], t)
+
+        # Write python series data:
+        for val in data:
+
+            self.data.data_py["time_series"][val] = np.append(self.data.data_py["time_series"][val], data[val])
 
     def save_py(self):
 
