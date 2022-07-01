@@ -238,7 +238,7 @@ class NavierStokesCartesian(Problem):
             self.F += self.rho(self.var)*dolfin.inner((self.v_tr - self.v_k)/self.dt, self.v_)*self.d_w*self.dx
 
         # Add stabilization (SUPG/grad-div, taken from [1]):
-        if False:
+        if True:
 
             # Define weight of stabilization:
             h = dolfin.CellDiameter(self.V.mesh())
@@ -265,6 +265,11 @@ class NavierStokesCartesian(Problem):
 
     # Density:
     def rho(self, *var):
+
+        return prm.rho_l
+
+    # Buoyancy density:
+    def rho_buoy(self, *var):
 
         return prm.rho_l
 
@@ -309,9 +314,6 @@ class NavierStokesCartesian(Problem):
 
     # Right-hand side:
     def d(self, u, *var):
-
-        # Define special density for buyoancy force:
-        self.rho_buoy = self.rho
 
         # Gravitation body force:
         f = self.rho_buoy(*var)*prm.g*(-ez)
