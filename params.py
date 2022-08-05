@@ -10,16 +10,16 @@ L_m = 335e3                 # Latent heat of melting (water--ice) [J/kg]
 rho_s = 917.                # Density of ice [kg*m**(-3)]
 rho_l = 1000.               # Density of water [kg*m**(-3)]
 rho = rho_l
-c_s = 2116.                # Specific heat of ice
+c_s = 2096.69                # Specific heat of ice
 c_l = 4182.                # Specific heat of water
 c_m = (c_l + c_s)/2        # Specific heat of the mushy region
-k_s = 2.26                  # Thermal conductivity of ice [W/m/K]
+k_s = 2.42059                  # Thermal conductivity of ice [W/m/K]
 k_l = 0.6                  # Thermal conductivity of water [W/m/K]
-mu_s = 1e-3                  # Dynamic viscosity of ice [Pa*s]
+mu_s = 1e6                  # Dynamic viscosity of ice [Pa*s]
 mu_l = 1e-3                  # Dynamic viscosity of water [Pa*s]
 nu_s = mu_s/rho_s           # Kinematic viscosity of ice [m**2/s]
 nu_l = mu_l/rho_l           # Kinematic viscosity of water [m**2/s]
-alpha_s = k_s/(rho_s*c_s)  # Heat diffusivity of ice
+alpha_s = k_s/(rho_s*c_s)   # Heat diffusivity of ice
 alpha_l = k_l/(rho_l*c_l)  # Heat diffusivity of water
 beta_s = 0.0               # Thermal expansivity of ice
 beta_l = 2.5e-4            # Thermal expansivity of water
@@ -27,7 +27,7 @@ beta_l = 2.5e-4            # Thermal expansivity of water
 # (I.2) Physical parameters
 # -------------------------
 g = 9.81                    # Gravitational acceleration
-theta_m = 273.              # Melting temperature [K]
+theta_m = 273.15              # Melting temperature [K]
 
 # (I.3) Geometric constants
 # -------------------------
@@ -66,7 +66,7 @@ R1 = 0.0; R2 = 1.
 Q_0 = 50.
 
 # Initial temperature:
-theta_i = 263.
+theta_i = 230.
 
 # (II.4) COMSOL benchmark
 # -----------------------

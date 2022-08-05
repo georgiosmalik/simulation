@@ -139,9 +139,9 @@ class Problem:
             solver_prm['newton_solver']['linear_solver'] = 'mumps'
             solver_prm['newton_solver']['lu_solver']['report'] = True
             #solver_prm['newton_solver']['lu_solver']['same_nonzero_pattern']=True
-            solver_prm['newton_solver']['absolute_tolerance'] = 1E-8
-            solver_prm['newton_solver']['relative_tolerance'] = 1E-8
-            solver_prm['newton_solver']['maximum_iterations'] = 15 # DBG
+            solver_prm['newton_solver']['absolute_tolerance'] = 1E-10
+            solver_prm['newton_solver']['relative_tolerance'] = 1E-10
+            solver_prm['newton_solver']['maximum_iterations'] = 10 # DBG
             solver_prm['newton_solver']['report'] = True
             #solver_prm['newton_solver']['error_on_nonconvergence'] = False
 
@@ -423,7 +423,7 @@ class RigidBodyMotionVAxisymNoninertial(NavierStokesVAxisym):
                        *dolfin.inner(self.rb_mass*(-(self.vb_tr - self.vb_k)/self.dt + prm.g), self.vb_)*self.dx\
                        - (2*dolfin.pi)*dolfin.inner(dolfin.dot(self.sigma(self.p_tr, self.v_tr, self.var),-self.n)[1],
                                                     self.vb_)\
-                                                    *self.d_w*self.ds(srf_id) # Check if 5 is body surface!
+                                                    *self.d_w*self.ds(srf_id) # Check body surface id!
 
     # Add non-inertial correction to the right hand side:
     def d(self, u, *var):
