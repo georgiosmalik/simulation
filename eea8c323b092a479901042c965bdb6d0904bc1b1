@@ -1,0 +1,1 @@
+Bug fix: it seems that expr * (dx(1) + dx(2)) != expr * dx(1) + expr * dx(2) in my code, might be an issue with dolfin
