@@ -406,7 +406,7 @@ class RigidBodyMotionVAxisymNoninertial(NavierStokesVAxisym):
         self._v, self._p, self._vb = dolfin.TrialFunctions(self.W)
 
         # Save rigid body properties:
-        self.rb_mass = rb_properties["mass"]; self.rb_surface_id = rb_properties["srf_id"]
+        self.rb_mass = rb_properties["mass"]; self.rb_srf_id = rb_properties["rb_srf_id"]
 
         return
 
@@ -417,13 +417,10 @@ class RigidBodyMotionVAxisymNoninertial(NavierStokesVAxisym):
         NavierStokesVAxisym.define_form(self, THETA, stationary)
 
         # Add ODE for rigid body vertical velocity:
-        for srf_id in self.rb_surface_id:
-            
-            self.F +=  1/dolfin.assemble(1.0*self.dx)\
-                       *dolfin.inner(self.rb_mass*(-(self.vb_tr - self.vb_k)/self.dt + prm.g), self.vb_)*self.dx\
-                       - (2*dolfin.pi)*dolfin.inner(dolfin.dot(self.sigma(self.p_tr, self.v_tr, self.var),-self.n)[1],
-                                                    self.vb_)\
-                                                    *self.d_w*self.ds(srf_id) # Check body surface id!
+        self.F +=  1/dolfin.assemble(1.0*self.dx)\
+                   *dolfin.inner(self.rb_mass*(-(self.vb_tr - self.vb_k)/self.dt + prm.g), self.vb_)*self.dx \
+                   - (2*dolfin.pi)*dolfin.inner(dolfin.dot(self.sigma(self.p_tr, self.v_tr, self.var),-self.n)[1], self.vb_)\
+                   *self.d_w*self.ds(self.rb_srf_id) # Check body surface id!
 
     # Add non-inertial correction to the right hand side:
     def d(self, u, *var):
