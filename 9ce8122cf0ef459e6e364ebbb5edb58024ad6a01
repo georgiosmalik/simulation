@@ -1,0 +1,1 @@
+Every variational problem now has the tools to save or load reference state from hdf file. When creating new hdf file, the newfile flag is set to True by default, when adding another functions to hdf file, set newfile to False.
