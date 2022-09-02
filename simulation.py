@@ -164,6 +164,48 @@ class Problem:
 
         return
 
+    # Save and load states to and from HDF5 file:
+    def save_state(self, varname, filename = "./out/data/ref_state.h5", newfile = True):
+
+        if newfile:
+
+            # Create new file with reference state:
+            hdf_state = dolfin.HDF5File(self.W.mesh().mpi_comm(), filename, "w")
+
+        else:
+
+            # Add to the reference state another function:
+            hdf_state = dolfin.HDF5File(self.W.mesh().mpi_comm(), filename, "a")
+
+        # Write the function into hdf under "/varname":
+        hdf_state.write(self.w, varname)
+
+        # Close the file:
+        hdf_state.close()
+
+        return
+
+    # Load reference state from hdf file:
+    def load_state(self, varname, filename = "./out/data/ref_state.h5"):
+
+        try:
+            
+            # Read the hdf file containing reference state:
+            hdf_state = dolfin.HDF5File(self.W.mesh().mpi_comm(), filename, "r")
+
+            # Read the reference state and save it to w_k:
+            hdf_state.read(self.w_k, varname)
+
+        # Catch the missing file error:
+        except RuntimeError:
+
+            dolfin.info("Data not found! Either file {} or collection {} is missing".format(filename, varname))
+
+        return
+
+# END of General problem
+# ======================
+
 # (I) Mechanical problems
 # -----------------------
 
