@@ -1,0 +1,1 @@
+I added the save_ref flag for Data class save_xdmf method, which saves last frame of the simulation into a separate xdmf file. The problem is, that the velocity field contains some big arrows when visualized in ParaView, though the file with all the time frames is ok. I do not know why, yet.
