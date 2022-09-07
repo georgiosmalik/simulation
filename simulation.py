@@ -600,8 +600,8 @@ class Data:
         # Save path to data folder:
         self.path = path
 
-        # Save communicator rank:
-        self.rank = geometry.rank
+        # Save communicator and rank:
+        self.comm = geometry.comm; self.rank = geometry.rank
 
         # Initialize XDMF data files:
         self.data_xdmf = dolfin.XDMFFile(geometry.comm,
@@ -620,13 +620,25 @@ class Data:
               
         return
 
-    def save_xdmf(self, t, *data):
+    def save_xdmf(self, t, *data, save_ref = False):
+
+        if save_ref:
+
+            # Create xdmf file:
+            state_xdmf = dolfin.XDMFFile(self.comm, self.path + "ref_state_viz.xdmf")
+
+            for file_ in data:
+
+                # Save function to xdmf file (t=t as a third argument is necessary due to pybind11 bug):
+                state_xdmf.write(file_, t = t)
+
+            state_xdmf.close()
 
         # Save material params
         for file_ in data:
 
             # Save function to xdmf file (t=t as a third argument is necessary due to pybind11 bug):
-            self.data_xdmf.write(file_, t = t)
+            self.data_xdmf.write(file_, t = t)             
 
         return
 
