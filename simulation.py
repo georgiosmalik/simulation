@@ -196,6 +196,9 @@ class Problem:
             # Read the reference state and save it to w_k:
             hdf_state.read(self.w_k, varname)
 
+            # Update also the function w for nonlinear solvers:
+            self.w.assign(self.w_k)
+
         # Catch the missing file error:
         except RuntimeError:
 
@@ -630,7 +633,7 @@ class Data:
             for file_ in data:
 
                 # Save function to xdmf file (t=t as a third argument is necessary due to pybind11 bug):
-                state_xdmf.write(file_, t = t)
+                state_xdmf.write(file_, t = 0.0)
 
             state_xdmf.close()
 
