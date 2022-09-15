@@ -1,0 +1,1 @@
+When setting initial condition from reference state, one should also assign it for a function itself, if the solver is non-linear. Without this, the non-linear solver starts from the zero function. This could lead to problems.
