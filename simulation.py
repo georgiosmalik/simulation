@@ -619,10 +619,11 @@ class Data:
         self.data_xdmf.parameters["functions_share_mesh"] = True
 
         # Initialize py data file and its basic structure:
-        self.data_py = {}; self.data_py["time_series"] = {"t": np.asarray([])}; self.data_py["parameters"] = {}
+        self.data_py = {}; self.data_py["t"] = np.asarray([]); self.data_py["parameters"] = {}
               
         return
 
+    # Write data into xdmf file:
     def save_xdmf(self, t, *data, save_ref = False):
 
         if save_ref:
@@ -645,16 +646,32 @@ class Data:
 
         return
 
-    def save_time_series(self, t, **data):
+    # Append data to data series:
+    def write_py_data(self, t = -1.0, **data):
 
-        # Write time point:
-        self.data.data_py["time_series"]["t"] = np.append(self.data.data_py["time_series"]["t"], t)
+        # Write time data series:
+        if t >= 0.0:
 
-        # Write python series data:
-        for val in data:
+            # Append only unique time points:
+            if not t in self.data_py["t"]:
+                
+                self.data_py["t"] = np.append(self.data_py["t"], t)
 
-            self.data.data_py["time_series"][val] = np.append(self.data.data_py["time_series"][val], data[val])
+            # Write python series data:
+            for val in data:
 
+                self.data_py[val] = np.append(self.data_py[val], data[val])
+
+        # Write parameter data:
+        else:
+
+            # Write python parameter data:
+            for par in data:
+
+                self.data_py[par] = data[par]
+                
+
+    # Save data_py into a file:
     def save_py(self):
 
         if self.rank == 0:
