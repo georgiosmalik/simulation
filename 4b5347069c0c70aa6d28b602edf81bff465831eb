@@ -1,0 +1,1 @@
+I decided that the list of parameters should contain only physical and general geometric parameters, problem specific parameters should be included in the main file of the project repository within the function itself.
