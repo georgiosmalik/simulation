@@ -59,6 +59,11 @@ def MINI_ele(mesh, deg = DEGREE):
 
     return dolfin.VectorElement(ufl.NodalEnrichedElement(V_ele, Q_ele))
 
+# Deine R element (for constants):
+def R_ele(mesh, deg = 0):
+
+    return dolfin.FiniteElement("R", mesh.ufl_cell(), deg)
+
 # Define piecwise polynomial scalar continous FE space:
 def CGdeg(mesh, deg = DEGREE):
 
@@ -72,6 +77,10 @@ def DGdeg(mesh, deg = 0):
 def TaylorHood(mesh, deg = DEGREE):
 
     return
+
+def R0(mesh, deg = 0):
+
+    return(dolfin.FunctionSpace(mesh, R_ele(mesh, deg)))
 
 
 
@@ -177,8 +186,18 @@ class Problem:
             # Add to the reference state another function:
             hdf_state = dolfin.HDF5File(self.W.mesh().mpi_comm(), filename, "a")
 
-        # Write the function into hdf under "/varname":
-        hdf_state.write(self.w, varname)
+        # Save last value of time step:
+        if varname == "/dt":
+
+            R = R0(self.W.mesh())
+
+            # Write the time step into hdf:
+            hdf_state.write(dolfin.interpolate(DT, R), varname)
+
+        else:
+
+            # Write the function into hdf under "/varname":
+            hdf_state.write(self.w, varname)
 
         # Close the file:
         hdf_state.close()
@@ -188,10 +207,47 @@ class Problem:
     # Load reference state from hdf file:
     def load_state(self, varname, filename = "./out/data/ref_state.h5"):
 
-        try:
-            
-            # Read the hdf file containing reference state:
-            hdf_state = dolfin.HDF5File(self.W.mesh().mpi_comm(), filename, "r")
+        # Read the hdf file containing reference state:
+        hdf_state = dolfin.HDF5File(self.W.mesh().mpi_comm(), filename, "r")
+
+        # # Catch the missing file error:
+        # except RuntimeError:
+
+        #     dolfin.info("Data not found! Either file {} or collection {} is missing".format(filename, varname))
+
+        #     return
+
+        # Load last value of time step:
+        if varname == "/dt":
+
+            R = R0(self.W.mesh())
+
+            dt = dolfin.interpolate(DT, R)
+
+            try:
+
+                # Try reading time step:
+                hdf_state.read(dt, varname)
+
+                if (dolfin.MPI.rank(self.W.mesh().mpi_comm()) == (self.W.mesh().mpi_comm().Get_size() - 1)):
+
+                    dtt = dt.vector().get_local()[0]
+
+                else:
+
+                    dtt = None
+
+                # Broad cast value of velocity to other processes (in parallel):
+                dtt = self.W.mesh().mpi_comm().bcast(dtt, root = self.W.mesh().mpi_comm().Get_size() - 1)
+
+                DT.assign(dtt)
+
+            # Catch missing collection for dt:
+            except RuntimeError:
+
+                dolfin.info("No collection for time step found, (unchanged) dt = {}".format(float(DT)))
+
+        else:
 
             # Read the reference state and save it to w_k:
             hdf_state.read(self.w_k, varname)
@@ -199,10 +255,8 @@ class Problem:
             # Update also the function w for nonlinear solvers:
             self.w.assign(self.w_k)
 
-        # Catch the missing file error:
-        except RuntimeError:
-
-            dolfin.info("Data not found! Either file {} or collection {} is missing".format(filename, varname))
+        # Close the file:
+        hdf_state.close()
 
         return
 
@@ -224,12 +278,12 @@ class NavierStokesCartesian(Problem):
         # -------------
 
         # Elements and spaces for mechanical problem (Taylor-Hood):
-        V_ele = vecCGdeg_ele(geometry.mesh, DEGREE+1)
-        P_ele = CGdeg_ele(geometry.mesh, DEGREE)
+        # V_ele = vecCGdeg_ele(geometry.mesh, DEGREE+1)
+        # P_ele = CGdeg_ele(geometry.mesh, DEGREE)
 
         # Elements and spaces for mechanical problem (Bubble for velocity, works with dolfin-version 2019.1.0):
-        # V_ele = MINI_ele(geometry.mesh, DEGREE)
-        # P_ele = CGdeg_ele(geometry.mesh, DEGREE)
+        V_ele = MINI_ele(geometry.mesh, DEGREE)
+        P_ele = CGdeg_ele(geometry.mesh, DEGREE)
 
         # Define mixed element for velocity and pressure:
         W_ele = dolfin.MixedElement([V_ele, P_ele])
