@@ -13,11 +13,14 @@ import sim.params as prm
 # (0.1) Temporal discretization
 # -----------------------------
 
-# Time discretization parameter THETA (0.0 = forward Euler):
-THETA = 0.0
+# Setup global time variable:
+T = dolfin.Constant(0.0)
 
 # Default time step size:
 DT = dolfin.Constant(1e-3)
+
+# Time discretization parameter THETA (0.0 = forward Euler):
+THETA = 0.0
 
 # (0.2) Spatial discretization
 # ----------------------------
@@ -194,6 +197,14 @@ class Problem:
             # Write the time step into hdf:
             hdf_state.write(dolfin.interpolate(DT, R), varname)
 
+        # Save (physical) time of simulation:
+        elif varname == "/t":
+
+            R = R0(self.W.mesh())
+
+            # Write the time step into hdf:
+            hdf_state.write(dolfin.interpolate(T, R), varname)
+
         else:
 
             # Write the function into hdf under "/varname":
@@ -246,6 +257,36 @@ class Problem:
             except RuntimeError:
 
                 dolfin.info("No collection for time step found, (unchanged) dt = {}".format(float(DT)))
+
+        # Load last value of (physical) time:
+        elif varname == "/t":
+
+            R = R0(self.W.mesh())
+
+            t = dolfin.interpolate(T, R)
+
+            try:
+
+                # Try reading time step:
+                hdf_state.read(t, varname)
+
+                if (dolfin.MPI.rank(self.W.mesh().mpi_comm()) == (self.W.mesh().mpi_comm().Get_size() - 1)):
+
+                    t_ = t.vector().get_local()[0]
+
+                else:
+
+                    t_ = None
+
+                # Broad cast value of velocity to other processes (in parallel):
+                tt = self.W.mesh().mpi_comm().bcast(t_, root = self.W.mesh().mpi_comm().Get_size() - 1)
+
+                T.assign(tt)
+
+            # Catch missing collection for dt:
+            except RuntimeError:
+
+                dolfin.info("No collection for (physical) time step, (unchanged) t = {}".format(float(T)))
 
         else:
 
